@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log/slog"
+	"net/url"
 	"os"
 	"os/user"
 	"path/filepath"
@@ -603,6 +604,10 @@ func (c *Crawler) dispatchCrawlAction(ctx context.Context, action *types.Action,
 
 		elementTimeout := element.Timeout(c.options.PageMaxTimeout)
 		if err := elementTimeout.ScrollIntoView(); err != nil {
+			// A display:none element never settles enough to scroll to.
+			if visible, visErr := element.Visible(); visErr == nil && !visible {
+				return c.followHiddenLink(page, action.Element)
+			}
 			return err
 		}
 		visible, err := element.Visible()
@@ -610,7 +615,7 @@ func (c *Crawler) dispatchCrawlAction(ctx context.Context, action *types.Action,
 			return err
 		}
 		if !visible {
-			return ErrElementNotVisible
+			return c.followHiddenLink(page, action.Element)
 		}
 
 		// Check if element is interactable (not blocked by overlays)
@@ -618,12 +623,12 @@ func (c *Crawler) dispatchCrawlAction(ctx context.Context, action *types.Action,
 		if err != nil {
 			var ce *rod.CoveredError
 			if errors.As(err, &ce) {
-				return ErrElementNotVisible
+				return c.followHiddenLink(page, action.Element)
 			}
 			return err
 		}
 		if interactable == nil {
-			return ErrElementNotVisible
+			return c.followHiddenLink(page, action.Element)
 		}
 
 		if err := element.Click(proto.InputMouseButtonLeft, 1); err != nil {
@@ -637,6 +642,42 @@ func (c *Crawler) dispatchCrawlAction(ctx context.Context, action *types.Action,
 	}
 
 	return nil
+}
+
+// followHiddenLink loads a link's URL directly when the link cannot be clicked,
+// such as one inside a CSS hover dropdown, so it is still visited.
+func (c *Crawler) followHiddenLink(page *browser.BrowserPage, element *types.HTMLElement) error {
+	if element == nil || element.TagName != "A" {
+		return ErrElementNotVisible
+	}
+	info, err := page.Info()
+	if err != nil {
+		return ErrElementNotVisible
+	}
+	target, ok := resolveHTTPLink(element.Attributes["href"], info.URL)
+	if !ok || (c.options.ScopeValidator != nil && !c.options.ScopeValidator(target)) {
+		return ErrElementNotVisible
+	}
+	if err := page.Timeout(c.options.PageMaxTimeout).Navigate(target); err != nil {
+		return err
+	}
+	return page.WaitPageLoadHeurisitics()
+}
+
+// resolveHTTPLink resolves href against pageURL, keeping only http(s) targets.
+func resolveHTTPLink(href, pageURL string) (string, bool) {
+	if href == "" {
+		return "", false
+	}
+	target, err := url.Parse(href)
+	if err != nil || (target.Scheme != "" && target.Scheme != "http" && target.Scheme != "https") {
+		return "", false
+	}
+	base, err := url.Parse(pageURL)
+	if err != nil {
+		return "", false
+	}
+	return base.ResolveReference(target).String(), true
 }
 
 func (c *Crawler) runRecordedAuthFlow(ctx context.Context) error {

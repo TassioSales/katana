@@ -244,8 +244,10 @@ func (c *Crawler) navigateRequest(s *common.CrawlSession, request *navigation.Re
 		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameDOMContentLoaded)
 	case "load":
 		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameLoad)
+	case "networkidle":
+		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameNetworkIdle)
 	default:
-		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameFirstMeaningfulPaint)
+		waitNavigation = waitAnyLifecycleEvent(page, proto.PageLifecycleEventNameFirstMeaningfulPaint, proto.PageLifecycleEventNameNetworkIdle)
 	}
 
 	err = page.Navigate(request.URL)
@@ -591,4 +593,18 @@ func headerValues(headers map[string][]string, name string) string {
 		}
 	}
 	return ""
+}
+
+// waitAnyLifecycleEvent is rod's Page.WaitNavigation for several events.
+// Small or blank pages never fire FirstMeaningfulPaint, so waiting on it
+// alone stalls until the request times out.
+func waitAnyLifecycleEvent(page *rod.Page, names ...proto.PageLifecycleEventName) func() {
+	_ = proto.PageSetLifecycleEventsEnabled{Enabled: true}.Call(page)
+	wait := page.EachEvent(func(e *proto.PageLifecycleEvent) bool {
+		return slices.Contains(names, e.Name)
+	})
+	return func() {
+		wait()
+		_ = proto.PageSetLifecycleEventsEnabled{Enabled: false}.Call(page)
+	}
 }

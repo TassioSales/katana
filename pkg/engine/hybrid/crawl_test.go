@@ -297,3 +297,48 @@ func TestShouldParseSubresourceOncePerBody(t *testing.T) {
 		require.False(t, c.shouldParse(true, "https://example.com/b", nil, html))
 	})
 }
+
+// A blank page never fires FirstMeaningfulPaint, which used to stall the
+// default and networkidle strategies until the request timed out.
+func TestBlankPageDoesNotTimeOut(t *testing.T) {
+	if path, _ := launcher.LookPath(); path == "" {
+		t.Skip("chrome/chromium not found, skipping browser test")
+	}
+
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		_, _ = w.Write([]byte(`<html><body></body></html>`))
+	}))
+	defer srv.Close()
+
+	for _, strategy := range []string{"heuristic", "networkidle"} {
+		t.Run(strategy, func(t *testing.T) {
+			var results []output.Result
+			options, err := types.NewCrawlerOptions(&types.Options{
+				MaxDepth:          1,
+				FieldScope:        "rdn",
+				BodyReadSize:      math.MaxInt,
+				Timeout:           8,
+				TimeStable:        1,
+				Concurrency:       1,
+				Parallelism:       1,
+				RateLimit:         150,
+				Strategy:          "depth-first",
+				PageLoadStrategy:  strategy,
+				Headless:          true,
+				HeadlessNoSandbox: true,
+				OnResult:          func(r output.Result) { results = append(results, r) },
+			})
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = options.Close() })
+
+			crawler, err := New(options)
+			require.NoError(t, err)
+			t.Cleanup(func() { _ = crawler.Close() })
+
+			require.NoError(t, crawler.Crawl(srv.URL))
+			require.NotEmpty(t, results)
+			require.Empty(t, results[0].Error)
+		})
+	}
+}

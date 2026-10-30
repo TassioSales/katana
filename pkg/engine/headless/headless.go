@@ -51,6 +51,18 @@ func New(options *types.CrawlerOptions) (*Headless, error) {
 	return headless, nil
 }
 
+// writeResult mirrors common.Shared.Output so library users get OnResult
+// from headless crawls as they do from standard and hybrid.
+func (h *Headless) writeResult(result *output.Result) error {
+	if err := h.options.OutputWriter.Write(result); err != nil {
+		return err
+	}
+	if h.options.Options.OnResult != nil {
+		h.options.Options.OnResult(*result)
+	}
+	return nil
+}
+
 func newLogger(options *types.CrawlerOptions) *slog.Logger {
 	if options.Logger != nil {
 		return options.Logger
@@ -156,7 +168,7 @@ func (h *Headless) Crawl(URL string) error {
 			// browser happened to fetch more than once.
 			navigationRequests := h.performAdditionalAnalysis(rr)
 			for _, req := range navigationRequests {
-				if err := h.options.OutputWriter.Write(req); err != nil {
+				if err := h.writeResult(req); err != nil {
 					h.logger.Debug("failed to write navigation result",
 						slog.String("url", func() string {
 							if req != nil && req.Request != nil {
@@ -186,7 +198,7 @@ func (h *Headless) Crawl(URL string) error {
 					rr.Response.Body = ""
 				}
 			}
-			if err := h.options.OutputWriter.Write(rr); err != nil {
+			if err := h.writeResult(rr); err != nil {
 				h.logger.Debug("failed to write result",
 					slog.String("error", err.Error()),
 				)

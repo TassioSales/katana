@@ -123,3 +123,9 @@ func TestRelativeEndpointsRegex(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractBodyEndpointsKeepsPort(t *testing.T) {
+	data := `<a href="http://example.com:8080/b/x.html">x</a> see https://example.com:8443/api/v1`
+
+	assert.ElementsMatch(t, []string{"http://example.com:8080/b/x.html", "https://example.com:8443/api/v1"}, ExtractBodyEndpoints(data))
+}

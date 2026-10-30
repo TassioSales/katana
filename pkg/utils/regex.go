@@ -8,7 +8,7 @@ var (
 	BodyA0 = `(?:`
 	BodyB0 = `(`
 	BodyC0 = `(?:[\.]{1,2}/[A-Za-z0-9\-_/\\?&@\.?=%]+)`
-	BodyC1 = `|(https?://[A-Za-z0-9_\-\.]+([\.]{0,2})?\/[A-Za-z0-9\-_/\\?&@\.?=%]+)`
+	BodyC1 = `|(https?://[A-Za-z0-9_\-\.]+(?::\d{1,5})?([\.]{0,2})?\/[A-Za-z0-9\-_/\\?&@\.?=%]+)`
 	BodyC2 = `|(/[A-Za-z0-9\-_/\\?&@\.%]+\.(aspx?|action|cfm|cgi|do|pl|css|x?html?|js(p|on)?|pdf|php5?|py|rss))`
 	BodyC3 = `|([A-Za-z0-9\-_?&@\.%]+/[A-Za-z0-9/\\\-_?&@\.%]+\.(aspx?|action|cfm|cgi|do|pl|css|x?html?|js(p|on)?|pdf|php5?|py|rss))`
 	BodyB1 = `)`

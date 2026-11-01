@@ -75,6 +75,7 @@ func BuildHttpClient(dialer *fastdialer.Dialer, options *types.Options, redirect
 						delete(req.Header, k)
 						req.Header.Del(k)
 					}
+					req.Header.Del("Cookie")
 				}
 			}
 			return nil

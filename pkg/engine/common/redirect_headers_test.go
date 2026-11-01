@@ -50,7 +50,7 @@ func TestRedirect_CustomHeaders_KeptInScope(t *testing.T) {
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Equal(t, "my-secret-key", targetReceivedKey, "in-scope redirect should keep custom headers")
 }
@@ -99,7 +99,7 @@ func TestRedirect_CustomHeaders_RemovedOutOfScope(t *testing.T) {
 
 	resp, err := client.Do(req)
 	require.NoError(t, err)
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	require.Empty(t, targetReceivedKey, "out-of-scope redirect should remove custom X-Api-Key header")
 	require.Empty(t, targetReceivedCookie, "out-of-scope redirect should remove custom Cookie header")

@@ -17,14 +17,17 @@ import (
 )
 
 // hoverDropdownPage hides its menu links until the visitor hovers the menu,
-// so the crawler cannot click them.
-const hoverDropdownPage = `<!doctype html><html><head><title>home</title><style>
+// so the crawler cannot click them. The base href makes "guide" resolve to
+// /docs/guide, as the browser would.
+const hoverDropdownPage = `<!doctype html><html><head><title>home</title><base href="/docs/"><style>
 .menu{display:none}.dropdown:hover .menu{display:block}
 </style></head><body>
 <a href="/top">Top</a>
+<a href="/nopointer" style="pointer-events:none">No pointer</a>
 <div class="dropdown"><span>More</span><ul class="menu">
 <li><a href="/hidden/alpha">Alpha</a></li>
 <li><a href="/hidden/beta">Beta</a></li>
+<li><a href="guide">Guide</a></li>
 <li><a href="%s/outside">Outside</a></li>
 </ul></div></body></html>`
 
@@ -72,7 +75,7 @@ func TestE2E_Crawl_FollowsHiddenDropdownLinks(t *testing.T) {
 	host := strings.TrimPrefix(server.URL, "http://")
 	mu.Lock()
 	defer mu.Unlock()
-	for _, path := range []string{"/hidden/alpha", "/hidden/beta"} {
+	for _, path := range []string{"/hidden/alpha", "/hidden/beta", "/docs/guide", "/nopointer"} {
 		require.Positive(t, hits[host+path], "hidden link %s was never followed, hits=%v", path, hits)
 	}
 	require.Zero(t, hits[strings.TrimPrefix(outside.URL, "http://")+"/outside"], "out-of-scope hidden link was requested")

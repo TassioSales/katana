@@ -342,3 +342,28 @@ func TestBlankPageDoesNotTimeOut(t *testing.T) {
 		})
 	}
 }
+
+// Enabling lifecycle events replays the previous document's networkIdle, and
+// an iframe goes idle before its parent; neither may end the wait.
+func TestLoadWaitIgnoresStaleAndChildFrameEvents(t *testing.T) {
+	_, page := setupBrowserTest(t)
+	const slow = 2 * time.Second
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "text/html")
+		switch r.URL.Path {
+		case "/":
+			_, _ = w.Write([]byte(`<html><body><iframe src="/frame"></iframe><img src="/slow"></body></html>`))
+		case "/frame":
+			_, _ = w.Write([]byte(`<html><body><h1>frame content</h1></body></html>`))
+		case "/slow":
+			time.Sleep(slow)
+		}
+	}))
+	defer srv.Close()
+
+	start := time.Now()
+	wait := waitAnyLifecycleEvent(page, proto.PageLifecycleEventNameFirstMeaningfulPaint, proto.PageLifecycleEventNameNetworkIdle)
+	require.NoError(t, page.Navigate(srv.URL))
+	wait()
+	require.GreaterOrEqual(t, time.Since(start), slow, "wait ended before the main frame loaded")
+}

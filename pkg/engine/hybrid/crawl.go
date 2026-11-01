@@ -245,7 +245,7 @@ func (c *Crawler) navigateRequest(s *common.CrawlSession, request *navigation.Re
 	case "load":
 		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameLoad)
 	case "networkidle":
-		waitNavigation = page.WaitNavigation(proto.PageLifecycleEventNameNetworkIdle)
+		waitNavigation = waitAnyLifecycleEvent(page, proto.PageLifecycleEventNameNetworkIdle)
 	default:
 		waitNavigation = waitAnyLifecycleEvent(page, proto.PageLifecycleEventNameFirstMeaningfulPaint, proto.PageLifecycleEventNameNetworkIdle)
 	}
@@ -597,11 +597,21 @@ func headerValues(headers map[string][]string, name string) string {
 
 // waitAnyLifecycleEvent is rod's Page.WaitNavigation for several events.
 // Small or blank pages never fire FirstMeaningfulPaint, so waiting on it
-// alone stalls until the request times out.
+// alone stalls until the request times out. Unlike rod, it only accepts the
+// main frame's events from the next navigation: enabling lifecycle events
+// replays the current document's networkIdle, and iframes fire their own.
 func waitAnyLifecycleEvent(page *rod.Page, names ...proto.PageLifecycleEventName) func() {
 	_ = proto.PageSetLifecycleEventsEnabled{Enabled: true}.Call(page)
+	var loader proto.NetworkLoaderID
 	wait := page.EachEvent(func(e *proto.PageLifecycleEvent) bool {
-		return slices.Contains(names, e.Name)
+		if e.FrameID != page.FrameID {
+			return false
+		}
+		if e.Name == proto.PageLifecycleEventNameInit {
+			loader = e.LoaderID
+			return false
+		}
+		return loader != "" && e.LoaderID == loader && slices.Contains(names, e.Name)
 	})
 	return func() {
 		wait()

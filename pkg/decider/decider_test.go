@@ -12,6 +12,7 @@ import (
 	"sync"
 	"sync/atomic"
 	"testing"
+	"testing/synctest"
 	"time"
 
 	"github.com/stretchr/testify/require"
@@ -188,30 +189,35 @@ func TestCacheCoalescesConcurrentQuestions(t *testing.T) {
 }
 
 func TestCacheCoalescesFailedQuestions(t *testing.T) {
-	s := &errStub{release: make(chan struct{}), err: errors.New("malformed")}
-	c, err := NewCache(s, "", false, 5)
-	require.NoError(t, err)
+	// failures are not cached, so a waiter that arrives after the release
+	// asks again; synctest.Wait parks every waiter before the release
+	synctest.Test(t, func(t *testing.T) {
+		s := &errStub{release: make(chan struct{}), err: errors.New("malformed")}
+		c, err := NewCache(s, "", false, 5)
+		require.NoError(t, err)
 
-	var wg sync.WaitGroup
-	errs := make(chan error, 5)
-	for range 5 {
-		wg.Go(func() {
-			_, err := c.Decide(context.Background(), zip)
-			errs <- err
-		})
-	}
-	require.Eventually(t, func() bool { return s.calls.Load() == 1 }, time.Second, 10*time.Millisecond)
-	close(s.release)
-	wg.Wait()
-	close(errs)
-	for err := range errs {
+		var wg sync.WaitGroup
+		errs := make(chan error, 5)
+		for range 5 {
+			wg.Go(func() {
+				_, err := c.Decide(context.Background(), zip)
+				errs <- err
+			})
+		}
+		synctest.Wait()
+		require.EqualValues(t, 1, s.calls.Load())
+		close(s.release)
+		wg.Wait()
+		close(errs)
+		for err := range errs {
+			require.ErrorContains(t, err, "malformed")
+		}
+		require.EqualValues(t, 1, s.calls.Load(), "waiters must share the error")
+
+		_, err = c.Decide(context.Background(), zip)
 		require.ErrorContains(t, err, "malformed")
-	}
-	require.EqualValues(t, 1, s.calls.Load(), "waiters must share the error")
-
-	_, err = c.Decide(context.Background(), zip)
-	require.ErrorContains(t, err, "malformed")
-	require.EqualValues(t, 2, s.calls.Load(), "a later call can try again")
+		require.EqualValues(t, 2, s.calls.Load(), "a later call can try again")
+	})
 }
 
 type errStub struct {

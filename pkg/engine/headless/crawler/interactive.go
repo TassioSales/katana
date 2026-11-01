@@ -5,7 +5,6 @@ import (
 	"encoding/json"
 	"fmt"
 	"log/slog"
-	"net/url"
 	"strconv"
 	"strings"
 	"time"
@@ -275,15 +274,11 @@ func (e *interactiveExplorer) candidates(pageURL string) ([]*types.HTMLElement, 
 			continue
 		}
 		if item.TagName == "A" && item.Attributes["href"] != "" {
-			target, err := url.Parse(item.Attributes["href"])
-			if err != nil || (target.Scheme != "" && target.Scheme != "http" && target.Scheme != "https") {
+			target, ok := resolveHTTPLink(item.Attributes["href"], pageURL)
+			if !ok {
 				continue
 			}
-			base, err := url.Parse(pageURL)
-			if err != nil {
-				continue
-			}
-			if validate := e.crawler.options.ScopeValidator; validate != nil && !validate(base.ResolveReference(target).String()) {
+			if validate := e.crawler.options.ScopeValidator; validate != nil && !validate(target) {
 				continue
 			}
 		}

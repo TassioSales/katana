@@ -123,3 +123,10 @@ func TestRelativeEndpointsRegex(t *testing.T) {
 		})
 	}
 }
+
+func TestExtractEndpointsUnescapesJSONSlashes(t *testing.T) {
+	data := `{"abs":"http:\/\/example.com\/a\/x.html","rel":"\/a\/rel.html"}`
+
+	assert.ElementsMatch(t, []string{"http://example.com/a/x.html", "/a/rel.html"}, ExtractBodyEndpoints(data))
+	assert.ElementsMatch(t, []string{"http://example.com/a/x.html", "/a/rel.html"}, ExtractRelativeEndpoints(data))
+}

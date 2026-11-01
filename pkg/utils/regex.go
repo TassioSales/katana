@@ -2,6 +2,7 @@ package utils
 
 import (
 	"regexp"
+	"strings"
 )
 
 var (
@@ -33,7 +34,7 @@ func ExtractBodyEndpoints(data string) []string {
 	matches := []string{}
 	unique := make(map[string]struct{})
 
-	relativeMatches := pageBodyRegex.FindAllStringSubmatch(data, -1)
+	relativeMatches := pageBodyRegex.FindAllStringSubmatch(unescapeJSONSlashes(data), -1)
 	for _, match := range relativeMatches {
 		if len(match) < 2 {
 			continue
@@ -52,7 +53,7 @@ func ExtractRelativeEndpoints(data string) []string {
 	matches := []string{}
 	unique := make(map[string]struct{})
 
-	relativeMatches := relativeEndpointsRegex.FindAllStringSubmatch(data, -1)
+	relativeMatches := relativeEndpointsRegex.FindAllStringSubmatch(unescapeJSONSlashes(data), -1)
 	for _, match := range relativeMatches {
 		if len(match) < 2 {
 			continue
@@ -65,4 +66,10 @@ func ExtractRelativeEndpoints(data string) []string {
 		matches = append(matches, match[1])
 	}
 	return matches
+}
+
+// unescapeJSONSlashes turns JSON's escaped "\/" back into "/", otherwise the
+// backslash ends up in extracted paths and absolute URLs lose their scheme.
+func unescapeJSONSlashes(data string) string {
+	return strings.ReplaceAll(data, `\/`, "/")
 }
